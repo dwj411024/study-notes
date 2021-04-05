@@ -1,0 +1,9 @@
+# 1.snd_minors
+
+在/core/sound.c文件中，定义了一个全局的指针数组`static struct snd_minor *snd_minors[SNDRV_OS_MINORS]`。该数组的值会在`snd_register_device`函数中进行初始化，即每有一个device进行初始化，就会有一个snd_minors指针指向该device。而`snd_register_device`在control设备和pcm设备注册时都会调用该函数，即每一个control设备和pcm设备都有一个snd_minors中的元素与其对应。
+
+> 注意：在注册control设备时，由snd_ctl_dev_register调用snd_register_device传递的private_data是snd_card类型，所以在snd_ctl_open函数中，通过snd_lookup_minor_data查找的SNDRV_DEVICE_TYPE_CONTROL类型的private_data是snd_card类型的。而在注册pcm设备时，由snd_pcm_dev_register调用snd_register_device传递的private_data是snd_pcm类型的，在pcm_native.c文件中，通过调用snd_lookup_minor_data查找snd_pcm类型的参数。
+
+# 2.iminor
+
+该函数的作用是通过struct inode结点返回设备的设备号。在struct inode结点中，成员变量i_rdev的含义是：如果inode代表设备，则i_rdev表示该设备的设备号。iminor函数就是返回inode结点的i_rdev的值。
