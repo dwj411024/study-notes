@@ -37,6 +37,12 @@ const typeof(((type *)0)->member) *__mptr = (ptr);
 
 # 3.DEFINE_IDA
 
+# 4.of_parse_phandle_with_args
+
+# 5.notify机制
+
+
+
 
 
 
