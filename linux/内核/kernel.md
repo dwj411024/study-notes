@@ -81,11 +81,85 @@ linux中每个内核都可以做电源管理，在runtime电源管理框架中�
 
    queue_work(p_queue, &my_work);
 
-# 4.DEFINE_IDA
+# 4.IS_ERR/PTR_ERR/ERR_PTR
 
-# 5.of_parse_phandle_with_args
+这三个函数用于实现错误码和指针之间的相互转换。在《深入理解linux虚拟内存管理》一书中，在FIXADDR_TOP地址到4G地址空间之间有一个page的gap（4K大小）。地址区间是[0xFFFFF001,0xFFFFFFFF)，内核空间不对该区间做任何的地址映射，内核正式利用这一区间，将错误码映射到这个区间。三个函数的源码如下图
 
-# 6.notify机制
+```c
+#define MAX_ERRNO	4095
+
+#define IS_ERR_VALUE(x) unlikely((unsigned long)(void *)(x) >= (unsigned long)-MAX_ERRNO)
+
+static inline void * __must_check ERR_PTR(long error)
+{
+	return (void *) error;
+}
+
+static inline long __must_check PTR_ERR(__force const void *ptr)
+{
+	return (long) ptr;
+}
+
+static inline bool __must_check IS_ERR(__force const void *ptr)
+{
+	return IS_ERR_VALUE((unsigned long)ptr);
+}
+```
+
+内核空间定义的错误码最大个数是4095,对应4K空间的大小。函数返回的错误码都是负数，例如参数不合法，返回-EINVAL(-22)，没有分配到动态内存返回-ENOMEM(-12)。参考上面的源码，这些错误码和void\*类型的指针之间是什么关系呢？我们知道，-1在内存中的表示是0xFFFFFFFF，-2在内存中的表示是0xFFFFFFFE，-3在内存中的表示是0xFFFFFFFD，-4095在内存中的表示是0xFFFFF001。这些小于0的错误码刚好对应4G地址空间中的page gap。
+
+​	在函数返回值是int类型的函数中，当出错时，函数返回一个负数的错误码，实际是返回的一个>=0xFFFFF001的值，此时通过ERR_PTR可以将该错误码转换为void\*指针，指向page gap空间。
+
+​	当函数返回值是指针类型的函数时，如果函数执行出错，那么返回一个指向page gap的指针，即一个>=0xFFFFF001的值，通过PTR_ERR可以将该指针转换为错误码。
+
+​	IS_ERR的原理：通过以上介绍可知，若返回的值>=0xFFFFF001，则就是返回的一个错误码。通过IS_ERR来判断函数执行过程中是否出错。
+
+## 4.1示例
+
+```c
+struct clk_hw *of_clk_get_hw(struct device_node *np, int index,
+			     const char *con_id)
+{
+	int ret;
+	struct clk_hw *hw;
+	struct of_phandle_args clkspec;
+
+	ret = of_parse_clkspec(np, index, con_id, &clkspec);
+	if (ret)
+		return ERR_PTR(ret);
+
+	hw = of_clk_get_hw_from_clkspec(&clkspec);
+	of_node_put(clkspec.np);
+
+	return hw;
+}
+```
+
+上述代码中，of_clk_get_hw的返回值类型是指针，而of_parse_clkspec的返回值类型是int类型，当of_parse_clkspec执行过程中出错时，返回的ret是int类型，此时需要通过ERR_PTR将int类型的错误码转换成指针类型。
+
+```c
+struct clk *clk_get(struct device *dev, const char *con_id)
+{
+	const char *dev_id = dev ? dev_name(dev) : NULL;
+	struct clk_hw *hw;
+
+	if (dev && dev->of_node) {
+		hw = of_clk_get_hw(dev->of_node, 0, con_id);
+		if (!IS_ERR(hw) || PTR_ERR(hw) == -EPROBE_DEFER)
+			return clk_hw_create_clk(dev, hw, dev_id, con_id);
+	}
+
+	return __clk_get_sys(dev, dev_id, con_id);
+}
+```
+
+同样，在clk_get函数中，需要对of_parse_clkspec函数的返回值hw，调用IS_ERR判断是否出错，或者调用PTR_ERR将hw转换为错误码，切判断是否等于-EPROBE_DEFER。
+
+# 5.DEFINE_IDA
+
+# 6.of_parse_phandle_with_args
+
+# 7.notify机制
 
 
 
