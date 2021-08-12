@@ -155,11 +155,31 @@ struct clk *clk_get(struct device *dev, const char *con_id)
 
 同样，在clk_get函数中，需要对of_parse_clkspec函数的返回值hw，调用IS_ERR判断是否出错，或者调用PTR_ERR将hw转换为错误码，切判断是否等于-EPROBE_DEFER。
 
-# 5.DEFINE_IDA
+# 5.likely与unlikely
 
-# 6.of_parse_phandle_with_args
+内核代码中经常可见likely和unlikely，这两个函数原型如下：
 
-# 7.notify机制
+```c
+# define likely(x)  __builtin_expect(!!(x), 1)
+# define unlikely(x)    __builtin_expect(!!(x), 0)
+```
+
+​	源码采用了内建函数`__builtin_expect`，`__builtin_expect`函数的原型为`long __builtin_expect(long exp, long c)`，函数的返回值为表达式exp的值。它的作用是期望表达式exp的值等于c(如果exp==c条件成立的机会占绝大多数，那么性能将得到提升，否则性能反而会下降)。`__builtin_expect(exp, c)`的返回值仍是exp值本身，并不会改变exp的值。
+
+​	`__builtin_expect`函数用来引导gcc进行条件分支预测。在一条指令执行时，由于流水线的作用，cpu可以同时完成下一条指令的取指，这样可以提高cpu的额利用率。在执行条件分支指令时，cpu也会预取下一条指令，但是如果分支预测的结果为跳转到其它指令，那么cpu预取的指令就没用了，这样就降低了流水线的效率。另外，跳转指令相对于顺序执行的指令会多消耗cpu的时间，如果可以尽可能不跳转执行，也可以提高cpu的性能。
+
+​	if(likely(x))表示表达式x的值为真的可能性更大一些，那么执行if的机会大。而if(unlikely(x))表示表达式x的值为假的可能性更大一些，那么执行else的机会大。加上这种修饰后，编译成二进制代码时，likely使得if后面的执行语句紧跟前面的程序，而unlikely是的else后面的语句紧跟前面的程序，这样就会被cache预取，增加程序的执行速度。
+
+​	简单理解就是：
+
+- likely(x)表示表达式x为逻辑1的可能性比较大
+- unlikely(x)表示表达式x为逻辑0的可能性比较大
+
+# 6.DEFINE_IDA
+
+# 7.of_parse_phandle_with_args
+
+# 8.notify机制
 
 
 
